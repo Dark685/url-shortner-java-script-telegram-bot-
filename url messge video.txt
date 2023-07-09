@@ -1,0 +1,102 @@
+const axios = require('axios');
+const TelegramBot = require('node-telegram-bot-api');
+
+// replace the API_TOKEN with your own UrlShortx API token
+const API_TOKEN = 'API_TOKEN';
+
+// replace the TELEGRAM_BOT_TOKEN with your own Telegram Bot token
+const bot = new TelegramBot('TELEGRAM_BOT_TOKEN', { polling: true });
+
+// Function to shorten a URL using UrlShortx API
+async function shortenURL(url) {
+  try {
+    const response = await axios.get(`https://pdiskpro.in/api?api=${API_TOKEN}&url=${url}`);
+    console.log(`Received response from UrlShortx API endpoint: ${response.data}`);
+    const shortenedUrl = response.data.shortenedUrl;
+    return shortenedUrl;
+  } catch (error) {
+    console.error(`Error occurred while shortening URL: ${error.message}`);
+    return null;
+  }
+}
+
+// listen for incoming messages from Telegram
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const messageText = msg.text;
+
+  if (msg.photo && msg.caption) {
+    let captionText = msg.caption;
+    const urls = captionText.match(/https?:\/\/\S+/g);
+
+    if (urls && urls.length > 0) {
+      try {
+        const shortenedUrls = await Promise.all(urls.map(url => shortenURL(url)));
+        shortenedUrls.forEach((shortenedUrl, index) => {
+          captionText = captionText.replace(urls[index], shortenedUrl || urls[index]);
+        });
+        bot.sendPhoto(chatId, msg.photo[0].file_id, { caption: captionText });
+      } catch (error) {
+        console.error(`Error occurred while processing URLs: ${error.message}`);
+        bot.sendMessage(chatId, 'Error: Failed to process the URLs.');
+      }
+    } else {
+      bot.sendMessage(chatId, 'Error: The caption does not appear to contain any valid URLs.');
+    }
+  } else if (messageText) {
+    const urls = messageText.match(/https?:\/\/\S+/g);
+
+    if (urls && urls.length > 0) {
+      try {
+        const shortenedUrls = await Promise.all(urls.map(url => shortenURL(url)));
+        let replyMessage = messageText;
+        shortenedUrls.forEach((shortenedUrl, index) => {
+          replyMessage = replyMessage.replace(urls[index], shortenedUrl || urls[index]);
+        });
+        bot.sendMessage(chatId, replyMessage);
+      } catch (error) {
+        console.error(`Error occurred while processing URLs: ${error.message}`);
+        bot.sendMessage(chatId, 'Error: Failed to process the URLs.');
+      }
+    } else {
+      bot.sendMessage(chatId, 'Error: The message does not appear to contain any valid URLs.');
+    }
+  }
+});
+
+//new fun
+// Listen for incoming messagesconst TelegramBot = require('node-telegram-bot-api');
+
+
+// Listen for incoming messages
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+
+  // Check if the message contains a video and a caption
+  if (msg.video && msg.caption) {
+    // Remove the URL from the caption
+    const captionWithoutURL = removeUnwantedText(msg.caption);
+
+    // Send the video with the modified caption
+    bot.sendVideo(chatId, msg.video.file_id, { caption: captionWithoutURL });
+  }
+});
+
+// Function to remove unwanted text from the caption
+function removeUnwantedText(caption) {
+  // Remove the horizontal line
+  let modifiedCaption = caption.replace(/-{5,}/g, '');
+
+  // Remove words starting with @
+  modifiedCaption = modifiedCaption.replace(/@[^\s]+/g, '');
+
+  // Remove URLs of the form https://t.me/anytext
+  modifiedCaption = modifiedCaption.replace(/https:\/\/t\.me\/[^\s]+/g, '');
+
+  // Trim extra whitespace
+  modifiedCaption = modifiedCaption.trim();
+
+  return modifiedCaption;
+}
+
+
